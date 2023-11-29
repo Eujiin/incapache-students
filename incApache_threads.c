@@ -262,9 +262,6 @@ void send_resp_thread(int out_socket, int response_code, int cookie,
 
 	/*** enqueue the current thread in the "to_join" data structure ***/
 /*** TO BE DONE 7.1 START ***/
-	to_join[new_thread_idx] = to_join[connection_idx];
-	to_join[connection_idx] = &thread_ids[new_thread_idx];
-
 
 /*** TO BE DONE 7.1 END ***/
 
