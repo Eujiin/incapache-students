@@ -264,12 +264,7 @@ void send_response(int client_fd, int response_code, int cookie,
 		off += sent_bytes;
 	}
 
-	if (sendfile(client_fd, fd, NULL, file_size) < 0) {
-		//if(errno != EPIPE)
-			fprintf(stderr, "\n\n%i\n\n\n", fcntl(client_fd, F_GETFD));
-			fail_errno("sendfile");
-	}	
-	
+
 	if(close(fd)) fail_errno("close");
 
 /*** TO BE DONE 7.0 END ***/
@@ -370,7 +365,7 @@ void manage_http_requests(int client_fd
 			    if ( strcmp(option_name, "Cookie") == 0 ) {
                                 /*** parse the cookie in order to get the UserID and count the number of requests coming from this client ***/
 /*** TO BE DONE 7.0 START ***/
-						option_val = strtok_r(NULL, "=", &strtokr_save);
+					option_val = strtok_r(NULL, "=", &strtokr_save);
 						if (!strcmp(option_val, " UserID")) {
 							char* aux;
 							option_val = strtok_r(NULL, "\r\n", &strtokr_save);
