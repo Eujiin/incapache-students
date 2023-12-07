@@ -77,8 +77,26 @@ pthread_mutex_t mime_mutex = PTHREAD_MUTEX_INITIALIZER;
 	 *** no_free_threads, no_response_threads[conn_no], and
 	 *** connection_no[i] ***/
 /*** TO BE DONE 7.1 START ***/
+			if(pthread_mutex_lock(&threads_mutex)) fail("pthread_mutex_lock");
+			// if there are no threads to join, return
+			if(!to_join[conn_no]) {
+				if(pthread_mutex_unlock(&threads_mutex)) fail("pthread_mutex_unlock");
+				return;
+			}
+			// to_join is an array that stores the pointers to the threads that need to be joined
+			// to_join[conn_no] gives the thread that needs to be joined for the current connection number
+			i = to_join[conn_no] - thread_ids;
+			to_join[conn_no] = NULL;
+			
+			if(pthread_mutex_unlock(&threads_mutex)) fail("pthread_mutex_unlock");
+			// Wait for the thread to finish execution
+			if(pthread_join(thread_ids[i], NULL)) fail("pthread_join");
 
-
+			if(pthread_mutex_lock(&threads_mutex)) fail("pthread_mutex_lock");
+			// Update the shared variables
+			if((no_response_threads[conn_no])-- > 0) no_free_threads++;
+			connection_no[i] = FREE_SLOT;
+			if(pthread_mutex_unlock(&threads_mutex)) fail("pthread_mutex_unlock");
 /*** TO BE DONE 7.1 END ***/
 
     }
@@ -96,8 +114,32 @@ pthread_mutex_t mime_mutex = PTHREAD_MUTEX_INITIALIZER;
 	 *** no_free_threads, no_response_threads[conn_no], and connection_no[i],
 	 *** avoiding race conditions ***/
 /*** TO BE DONE 7.1 START ***/
+			if(pthread_mutex_lock(&threads_mutex)) fail("pthread_mutex_lock");
+			// if there are no threads to join, return
+			if(!to_join[thrd_no]) {
+				if(pthread_mutex_unlock(&threads_mutex)) fail("pthread_mutex_unlock");
+				return;
+			}
 
+			// connection_no is an array that stores the connection number for each thread
+			// conn_no is set to the connection number for the current thread (thrd_no)
+			conn_no = connection_no[thrd_no];
+			i = to_join[thrd_no] - thread_ids;
 
+			// Mark current thread as joined
+			to_join[thrd_no] = NULL;
+
+			if(pthread_mutex_unlock(&threads_mutex)) fail("pthread_mutex_unlock");
+
+			// Wait for the thread to finish execution
+			if(pthread_join(thread_ids[i], NULL)) fail("pthread_join");
+
+			if(pthread_mutex_lock(&threads_mutex)) fail("pthread_mutex_lock");
+			// Update the shared variables
+			if(--(no_response_threads[conn_no]) > 0)
+				no_free_threads++;
+			connection_no[i] = FREE_SLOT;
+			if(pthread_mutex_unlock(&threads_mutex)) fail("pthread_mutex_unlock");
 /*** TO BE DONE 7.1 END ***/
 
     }
@@ -142,6 +184,7 @@ void *client_connection_thread(void *vp)
 	/*** properly initialize the thread queue to_join ***/
 /*** TO BE DONE 7.1 START ***/
 
+	to_join[connection_no] = NULL;
 
 /*** TO BE DONE 7.1 END ***/
 
@@ -181,6 +224,7 @@ char *get_mime_type(char *filename)
 
 	/*** What is missing here to avoid race conditions ? ***/
 /*** TO BE DONE 7.0 START ***/
+	if(pthread_mutex_lock(&mime_mutex)) fail("pthread_mutex_lock");
 
 
 /*** TO BE DONE 7.0 END ***/
@@ -193,6 +237,7 @@ char *get_mime_type(char *filename)
 
 	/*** What is missing here to avoid race conditions ? ***/
 /*** TO BE DONE 7.0 START ***/
+	if(pthread_mutex_unlock(&mime_mutex)) fail("pthread_mutex_unlock");
 
 
 /*** TO BE DONE 7.0 END ***/
@@ -224,6 +269,8 @@ void send_resp_thread(int out_socket, int response_code, int cookie,
 	/*** enqueue the current thread in the "to_join" data structure ***/
 /*** TO BE DONE 7.1 START ***/
 
+	to_join[new_thread_idx] = to_join[connection_idx];
+	to_join[connection_idx] = &thread_ids[new_thread_idx];
 
 /*** TO BE DONE 7.1 END ***/
 

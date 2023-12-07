@@ -48,7 +48,11 @@ int get_new_UID(void)
      *** Be careful in order to avoid race conditions ***/
 /*** TO BE DONE 7.0 START ***/
 
+	if(pthread_mutex_lock(&cookie_mutex)) fail("pthread_mutex_lock");
 
+	UserTracker[(retval = CurUID++ % MAX_COOKIES)] = 0;
+
+	if(pthread_mutex_unlock(&cookie_mutex)) fail("pthread_mutex_unlock");
 /*** TO BE DONE 7.0 END ***/
 
     return retval;
@@ -64,7 +68,11 @@ int keep_track_of_UID(int myUID)
     /*** Increment UserTracker[myUID] and return the computed value.
      *** Be careful in order to avoid race conditions ***/
 /*** TO BE DONE 7.0 START ***/
+	if(pthread_mutex_lock(&cookie_mutex)) fail("pthread_mutex_lock");
 
+	newcount = (UserTracker[myUID])++;
+
+	if(pthread_mutex_unlock(&cookie_mutex)) fail("pthread_mutex_unlock");
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -95,7 +103,8 @@ void send_response(int client_fd, int response_code, int cookie,
 
 	/*** Compute date of servicing current HTTP Request using a variant of gmtime() ***/
 /*** TO BE DONE 7.0 START ***/
-
+	// Convert current time from time_t to struct tm using thread-safe gmtime_r
+	if(!gmtime_r(&now_t, &now_tm)) fail_errno("gmtime_r");
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -129,7 +138,9 @@ void send_response(int client_fd, int response_code, int cookie,
 
 			/*** compute file_size and file_modification_time ***/
 /*** TO BE DONE 7.0 START ***/
-
+			//save file size and modification time
+			file_size = stat_p->st_size;
+			file_modification_time = stat_p->st_mtime;
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -155,7 +166,12 @@ void send_response(int client_fd, int response_code, int cookie,
 
 			/*** compute file_size, mime_type, and file_modification_time of HTML_404 ***/
 /*** TO BE DONE 7.0 START ***/
+			// Get file stats
+			if(fstat(fd, &stat_buffer)) fail_errno("fstat");	
 
+ 			file_size = stat_buffer.st_size;
+			mime_type = my_strdup(HTML_mime);
+			file_modification_time = stat_buffer.st_mtime;
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -175,7 +191,12 @@ void send_response(int client_fd, int response_code, int cookie,
 
 			/*** compute file_size, mime_type, and file_modification_time of HTML_501 ***/
 /*** TO BE DONE 7.0 START ***/
+			// Get file stats
+			if(fstat(fd, &stat_buffer)) fail_errno("fstat");
 
+ 			file_size = stat_buffer.st_size;
+			mime_type = my_strdup(HTML_mime);
+			file_modification_time = stat_buffer.st_mtime;
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -187,8 +208,8 @@ void send_response(int client_fd, int response_code, int cookie,
         if ( cookie >= 0 ) {
             /*** set permanent cookie in order to identify this client ***/
 /*** TO BE DONE 7.0 START ***/
-
-
+	// Append a cookie header to the HTTP response with the user's ID
+	sprintf(http_header + strlen(http_header), "\r\nCookie: UserID=%i%s", cookie, COOKIE_EXPIRE);
 /*** TO BE DONE 7.0 END ***/
 
         }
@@ -207,6 +228,10 @@ void send_response(int client_fd, int response_code, int cookie,
 		     see gmtime and strftime ***/
 /*** TO BE DONE 7.0 START ***/
 
+	// Convert file modification time to GMT and format it as a string
+	if(!gmtime_r(&file_modification_time, &file_modification_tm)) fail_errno("gmtime_r2");
+			strftime(time_as_string, MAX_TIME_STR, "%a, %d %b %Y %T GMT", &file_modification_tm);
+	
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -237,7 +262,19 @@ void send_response(int client_fd, int response_code, int cookie,
 
 		/*** send fd file on client_fd, then close fd; see syscall sendfile  ***/
 /*** TO BE DONE 7.0 START ***/
+	// Send the file to the client bytes at a time
+	for(off_t off = 0; off < file_size;) {
+		ssize_t sent_bytes = sendfile(client_fd, fd, &off, file_size - off);
+		// handle errors
+		if(sent_bytes == -1) {
+			if(errno != EPIPE)
+				fail_errno("sendfile");
+			break;
+		}
+		off += sent_bytes;
+	}
 
+	if(close(fd)) fail_errno("close");
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -295,6 +332,9 @@ void manage_http_requests(int client_fd
 		/*** parse first line defining the 3 strings method_str,
 		 *** filename, and protocol ***/
 /*** TO BE DONE 7.0 START ***/
+		method_str = strtok_r(http_request_line, " ", &strtokr_save);
+		filename = strtok_r(NULL, " ", &strtokr_save);
+		protocol = strtok_r(NULL, "\r\n", &strtokr_save);
 
 
 /*** TO BE DONE 7.0 END ***/
@@ -334,6 +374,19 @@ void manage_http_requests(int client_fd
 			    if ( strcmp(option_name, "Cookie") == 0 ) {
                                 /*** parse the cookie in order to get the UserID and count the number of requests coming from this client ***/
 /*** TO BE DONE 7.0 START ***/
+					option_val = strtok_r(NULL, "=", &strtokr_save);
+
+					if (strcmp(option_val, "UserID") == 0) {
+						char* endptr;
+						option_val = strtok_r(NULL, "\r\n", &strtokr_save);
+
+						//convert the cookie value to an integer
+						UIDcookie = strtol(option_val, &endptr, 10);
+
+						// Validate the UserID cookie value and set it to -1 if it's invalid
+						if(endptr == option_val || UIDcookie < 0 || UIDcookie >= MAX_COOKIES)
+							UIDcookie = -1;
+					}
 
 
 /*** TO BE DONE 7.0 END ***/
@@ -346,7 +399,14 @@ void manage_http_requests(int client_fd
                                  *** and store date in since_tm
                                  ***/
 /*** TO BE DONE 7.0 START ***/
-
+						// Check if the HTTP request header contains the "If-Modified-Since" field
+						if (!strcmp(option_name, "If-Modified-Since")) {
+							// Get the value of the "If-Modified-Since" field
+							option_val = strtok_r(NULL, "\r\n", &strtokr_save);
+							// Convert the value to a time structure, if successful, set the request as conditional
+							if(strptime(option_val, "%a, %d %b %Y %T GMT", &since_tm))
+								http_method |= METHOD_CONDITIONAL;
+						}
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -402,7 +462,7 @@ void manage_http_requests(int client_fd
 				 *** Use something like timegm() to convert from struct tm to time_t
 				 ***/
 /*** TO BE DONE 7.0 START ***/
-
+				http_method = (my_timegm(&since_tm) < stat_p->st_mtime) ? (http_method & ~METHOD_CONDITIONAL) : METHOD_NOT_CHANGED;
 
 /*** TO BE DONE 7.0 END ***/
 

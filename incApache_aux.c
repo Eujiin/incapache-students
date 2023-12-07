@@ -76,7 +76,7 @@ time_t my_timegm(struct tm *tm)
 
         /*** Guess what is missing here ... ***/
 /*** TO BE DONE 7.0 START ***/
-
+			if (pthread_mutex_lock(&my_timegm_mutex)) fail("pthread_mutex_lock");
 
 /*** TO BE DONE 7.0 END ***/
 
@@ -91,7 +91,7 @@ time_t my_timegm(struct tm *tm)
 
         /*** Guess what is missing here ... ***/
 /*** TO BE DONE 7.0 START ***/
-
+			if (pthread_mutex_unlock(&my_timegm_mutex)) fail("pthread_mutex_unlock");
 
 /*** TO BE DONE 7.0 END ***/
 
