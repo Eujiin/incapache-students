@@ -80,6 +80,7 @@ void run_webserver(const char *const port_as_str, char *www_root, const int *con
 	}
 
 /*** TO BE DONE 7.0 START ***/
+	// Create a listening socket on the specified port and then drop the process privileges for security
 	create_listening_socket(port_as_str);
 	drop_privileges();
 
@@ -114,8 +115,9 @@ void run_webserver(const char *const port_as_str, char *www_root, const int *con
 
 		/*** create PTHREAD number i, running client_connection_thread() ***/
 /*** TO BE DONE 7.0 START ***/
-		if(pthread_create(&thread_ids[i], NULL, client_connection_thread, (void*)&connection_no[i]))
-			fail_errno("pthread_create");
+	// Handle each client connection in a new thread
+	if(pthread_create(&thread_ids[i], NULL, client_connection_thread, (void*)&connection_no[i]))
+		fail_errno("pthread_create");
 
 /*** TO BE DONE 7.0 END ***/
 
