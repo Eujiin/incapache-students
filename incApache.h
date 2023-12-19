@@ -18,6 +18,7 @@
 
 #ifndef incApache_h
 #define incApache_h
+#define INCaPACHE_7_1 // commentare questa riga per compilare HTTP V.1.0
 
 #ifdef DEBUG
 #define debug(...) printf(__VA_ARGS__)
